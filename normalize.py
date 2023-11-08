@@ -1,31 +1,32 @@
 class Normalize:
-    
-    def __init__(self):
-        self.constituents = []
-        self.donations = []
-        self.payments = []
-        self.adresses = []
-        
-    def normalize_data(self, data):
-        for donor in data:
+    def __init__(self, raw_data):
+        self.constituents, self.donations, self.payments, self.adresses = self.normalize(raw_data)
+
+    def normalize(self, raw_data):
+        constituents = []
+        donations = []
+        payments = []
+        adresses = []
+
+        for donor in raw_data:
             constituent = donor.copy()
 
             if 'address' in constituent:
                 if constituent['address']:
                     constituent['address']['constituent_id'] = constituent['id']
-                    self.adresses += [constituent['address']]
+                    adresses += [constituent['address']]
                 del constituent['address']
 
             if 'donations' in constituent:
                 if constituent['donations']:
-                    self.donations += constituent['donations']
+                    donations += constituent['donations']
                 del constituent['donations']
 
             if 'payments' in constituent:
                 if constituent['payments']:
-                    self.payments += constituent['payments']
+                    payments += constituent['payments']
                 del constituent['payments']
 
-            self.constituents += [constituent]
-    
-        
+            constituents += [constituent]
+
+        return constituents, donations, payments, adresses
