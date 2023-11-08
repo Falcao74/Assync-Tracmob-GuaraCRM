@@ -1,47 +1,51 @@
-import time
-from log import Log
+# coding: utf8
+import pymysql
+import asyncio
+import datetime
+import requests
+import subprocess
+import pandas as pd
 from load import Load
-from guara import Guara
+from guaracrm import GuaraCRM
 from normalize import Normalize
-from settings import user_token
-from asyncio import gather, run
-from datetime import datetime
+from sqlalchemy import create_engine
+from settings import IP_SERVER, DB_NAME, DB_USER, DB_PASS, DB_PORT, USER_TOKEN
 
-class APP:
+async def fetch_and_load(token, chunk_size, engine):
+    guara = GuaraCRM(token)
+    while guara.has_next_page():
+        dados_puro = guara.perform(chunk_size=chunk_size)
+        dados_normalizados = Normalize(dados_puro)
+        Load(dados_normalizados, engine).perform()
+
+def main():
+    token = USER_TOKEN  # Substituir pelo token real
+    inicio = datetime.datetime.now()
+    msg = 'com sucesso'
+    
+    try:
+        engine = create_engine(f'mysql+pymysql://{DB_USER}:{DB_PASS}@{IP_SERVER}:{DB_PORT}/{DB_NAME}?charset=utf8mb4')
         
-    async def main(self):
-        guara = Guara(user_token)
-        await guara.set_total_pages()
-        normalizer = Normalize()
-        load = Load()
-        log = Log() 
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(fetch_and_load(token, chunk_size=20, engine=engine))
         
-        try:
-            log.start_log()
-            tasks = await guara.create_tasks()
-            num_requests = len(tasks)
-            log.add_event(f'Quantidade de requests a serem feitas: {num_requests}')
-
-            counter = 0
-
-            for task in tasks:   
-                response = await guara.fetch_responses([task])
-                raw_data = response[0].json()['constituents']
-                normalizer.normalize_data(raw_data)  # Use o método da instância normalizer
-                load.prepare_to_load(normalizer)  # Use a instância normalizer
-                load.perform() 
-                counter += 1
-                print(f'Requisições: {counter}')
-             
-            log.add_event(f'Processo finalizado')
-                  
-        except Exception as e:
-            # Em caso de erro, registre o erro no log
-            log.add_event(f'Ocorreu um erro: {str(e)}\n O processo não finalizou')
-
-        # Ao final da rotina, escreva o log
-        log.write_log()
+    except Exception as e:
+        f = open("erros.txt", "a")
+        msg = 'com erros!'
+        f.write(f'\n{datetime.datetime.now()} - {str(e)}')
+        f.close()
+    
+    finally:
+        print(f"Processo concluído {msg}!")
+        final = datetime.datetime.now()
+    
+    print(
+        f'Processo finalizado em {final.day}/{final.month}'
+        f'\n Início em {inicio.hour} : {inicio.minute}: {inicio.second} - Término em '
+        f'{final.hour}: {final.minute}: {final.second}\n'
+        f'Processo completo no tempo de {final - inicio}'
+    )
+    input("Aperte enter para encerrar o programa.")
 
 if __name__ == "__main__":
-    app = APP()
-    run(app.main())
+    main()
